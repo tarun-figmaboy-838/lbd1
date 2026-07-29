@@ -1,0 +1,130 @@
+@font-face{font-family:"LilitaOne-Regular";src:url("../assets/fonts/LilitaOne-Regular.ttf") format("truetype");font-display:block;}
+
+/* uGUI runtime stylesheet -- shared by all three builds */
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%; overflow:hidden; background:#000;
+  -webkit-user-select:none; user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation; overscroll-behavior:none;
+}
+#viewport { position:fixed; inset:0; overflow:hidden; }
+#stage { position:absolute; left:0; top:0; transform-origin:0 0; }
+
+/* every Unity GameObject becomes one absolutely positioned div */
+.un { position:absolute; left:0; top:0; }
+.un-off { display:none !important; }
+.un-fx { position:absolute; left:0; top:0; pointer-events:none; z-index:9999; }
+
+.un-tmp { overflow:visible; }
+.un-tmp-inner { display:block; width:100%; }
+
+.un-btn { -webkit-user-select:none; user-select:none; }
+.un-btn.un-dis { pointer-events:none; }
+.un-press { }
+
+/* Unity Button ColorTint transition: multiply the target graphic's colour */
+.un-btn.un-dis > .un, .un-btn.un-dis { filter:none; }
+
+/* Unity Image draws into its own layer so a tint never bleeds onto children */
+.un-img {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  pointer-events: none; background-repeat: no-repeat; background-size: 100% 100%;
+}
+
+/* ---- tap-hint pulse ----
+   The hand sprite is a single-frame GIF and its Unity Animator was never ported,
+   so the hint sat perfectly still. Animating it needs no JS: engine.js stamps
+   data-name on every node, and .un-off keeps the rule inert until the dialogue
+   actually shows the hint.
+
+   The animation goes on the .un-img sprite layer, not on the node. The node's own
+   transform is written inline by applyTransform() (localScale + rotation), and a
+   CSS animation outranks inline style -- animating the node would overwrite that
+   and fight any God Mode scale edit. Child and parent transforms compose instead.
+   transform-origin sits on the measured fingertip (46.4%, 51.6% of the 1200x1200
+   sprite -- the artwork is only 276x347 of it, low and centred) so the pulse reads
+   as tapping the spot rather than the hand growing. See js/hint.js for the same
+   measurement. Transform-only, so it never costs layout. */
+/* The scene's own hand node never draws; js/hint.js renders #hintHand instead. */
+.un[data-name="hand"].hintHidden { visibility: hidden; }
+
+/* Tap hint overlay. z-index beats .un-fx (9999) so the glow can never wash over
+   the finger — see the header of js/hint.js for why a z-index on the scene's own
+   hand node cannot work. */
+#hintHand {
+  position: absolute;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .35s ease;
+}
+#hintHand.on { opacity: 1; }
+.hintHandArt {
+  width: 100%; height: 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  /* origin on the measured fingertip (46.4%, 51.6% of the 1200x1200 sprite — its
+     artwork is only 276x347, low and centred) so the pulse reads as tapping. */
+  transform-origin: 46.4% 51.6%;
+  animation: hintTap 1.15s cubic-bezier(.34, 1.4, .64, 1) infinite;
+  will-change: transform;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .45));
+}
+@keyframes hintTap {
+  0%, 100% { transform: scale(1) translateY(0); }
+  38%      { transform: scale(.86) translateY(4%); }
+  60%      { transform: scale(1.05) translateY(-2%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hintHandArt { animation: none; }
+}
+
+/* ---- preloader veil: hides the progressive first paint (js/preloader.js) ---- */
+#preloader {
+  position:fixed; inset:0; z-index:9000; display:flex;
+  align-items:center; justify-content:center;
+  background:#0b1c2c; opacity:1; transition:opacity .38s ease;
+}
+#preloader.pl-gone { opacity:0; pointer-events:none; }
+.pl-inner { width:min(62vw,420px); text-align:center; color:#cfe6f5; }
+.pl-title {
+  font-family:"LilitaOne-Regular", sans-serif; font-size:clamp(20px,3.2vw,34px);
+  letter-spacing:.04em; margin-bottom:14px;
+}
+.pl-track {
+  height:10px; border-radius:99px; overflow:hidden;
+  background:rgba(255,255,255,.14);
+}
+.pl-fill {
+  width:0%; height:100%; border-radius:99px;
+  background:linear-gradient(90deg,#3fd0ff,#7ef0d0); transition:width .2s ease;
+}
+.pl-pct { margin-top:10px; font:600 13px/1 system-ui, sans-serif; opacity:.7; }
+
+/* ---- portrait-phone guard (js/orientation.js) ---- */
+#rotateVeil {
+  position:fixed; inset:0; z-index:9500; display:none;
+  align-items:center; justify-content:center;
+  background:#0b1c2c; color:#e8f4ff; text-align:center;
+}
+#rotateVeil.rv-on { display:flex; }
+body.rotateBlocked #viewport { visibility:hidden; }
+.rv-inner { padding:24px; max-width:320px; }
+.rv-phone {
+  width:64px; height:112px; margin:0 auto 22px;
+  border:3px solid #7ef0d0; border-radius:12px;
+  animation:rvTurn 2.2s ease-in-out infinite;
+}
+.rv-screen { width:100%; height:100%; border-radius:8px; background:rgba(126,240,208,.16); }
+.rv-title {
+  font-family:"LilitaOne-Regular", sans-serif; font-size:24px; margin-bottom:8px;
+}
+.rv-sub { font:400 15px/1.45 system-ui, sans-serif; opacity:.72; }
+@keyframes rvTurn {
+  0%, 30% { transform:rotate(0deg); }
+  60%, 100% { transform:rotate(-90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-phone { animation:none; transform:rotate(-90deg); }
+}

@@ -1,0 +1,25 @@
+{
+ "referencedAssets": 86,
+ "filesOnDisk": 86,
+ "byKind": {
+  "img": 60,
+  "audio": 25,
+  "fonts": 1
+ },
+ "missing": [],
+ "zeroByte": [],
+ "unreferenced": [],
+ "runtimePathViolations": [],
+ "provenanceLabels": [
+  "Assets/Animation/BackGround.controller",
+  "Assets/Animation/complation panel.controller",
+  "Assets/Graphics/LBD1-20250501T050609Z-1-001/LBD1/animations/Image.controller",
+  "Assets/Graphics/LBD1-20250501T050609Z-1-001/LBD1/animations/rays.controller"
+ ],
+ "provenanceLabelCount": 4,
+ "runtimePathsChecked": 92,
+ "slicedWithBorder": 1,
+ "slicedWithoutBorder": [],
+ "atlasCroppedSprites": 0,
+ "pass": true
+}
