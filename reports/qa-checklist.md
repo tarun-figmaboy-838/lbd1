@@ -599,3 +599,63 @@ the "Please make the window bigger" copy was exercised. A real phone should read
   is raised to 180 s. Frame timings measured while this host is thrashing are not
   trustworthy — one run reported a 3154 ms flight and a 3013 ms frame that did not
   reproduce.
+
+## 17. "Bag lag" — it was a dead input window, not a stutter — 2026-07-29
+
+Reported twice as the bag lagging when a gem lands. Earlier answers said there was no
+lag, citing `worstFrameInAnyFlight` of 15.7 ms and 0 janky frames. **That measurement
+could not have seen this defect**: its window ran from gem-shown to gem-hidden, and
+`updateBagImage()` — which does everything interesting — runs *at* gem-hidden. The
+landing frame was never measured.
+
+Measuring the landing directly shows the rendering is genuinely fine:
+
+| Landing | Worst frame | Frames > 16.7 ms |
+|---|---|---|
+| All nine (`sack_1`…`sack_9`) | **4.3–8.2 ms** | **0** |
+
+Sprite swap, `setText` and the audio start each cost under 1.5 ms synchronously. So it
+is not a stutter. What it is:
+
+| Time after the bag fills | What happens |
+|---|---|
+| +1 ms | Winner text ("One gem collected!") and its sound |
+| **+733–985 ms** | Caption "Click on the number of gems found so far" starts typing, with its voice-over |
+| **+1417 ms** | Number strip finally becomes interactable |
+
+**For 430–680 ms the game asked for a tap and ignored it.** A child taps the number,
+nothing answers, and that reads as lag. The window varies because the prompt's start
+depends on the preceding winner clip's length, while
+`callSetButtonSetWhenActive` waited a fixed `yield 1.4`.
+
+### Fix
+
+`showNextMessage` already resolves each message's `inputButton`, and for the number
+prompt that resolves to **exactly that round's correct strip button** (round 1 → "1",
+round 2 → "2", … verified for all nine). So the strip is now made answerable when that
+message is shown, rather than on a timer. A fixed delay cannot track a prompt whose
+start time depends on a voice-over; tying it to the message removes the race outright.
+The 1.4 s timer stays as an idempotent backstop, and `currentCollectedGemsIndex` is
+already correct by then — `incrementGemIndex()` runs 1 ms after the bag fills.
+
+| Check | Before | After |
+|---|---|---|
+| Strip answerable the instant the prompt starts | no | **YES, 8/8 rounds measured** |
+| Mean delay from bag filled to answerable | 1417 ms | 1004 ms |
+| Nine-round playthrough | — | 9/9, 18 taps, ends on the final line, 0 console errors |
+
+### A measurement trap this exposed
+
+Measuring *transitions* instead of *state* invented a defect that did not exist. One
+round reported a **+10,627 ms** dead window; its `stripON` timestamp was identical to
+the next round's, because the strip had been continuously enabled through that round
+and so produced no ON transition to find. Sampling "is the strip answerable right now"
+at the instant the prompt fires gave the truthful answer, 8/8 ready. Ask for state at
+the moment you care about, not for the nearest edge.
+
+Two things this section does **not** claim. Frame timings on this host are unstable —
+the same code measured 20.1, 35.8, 195.6 and 357.5 ms worst in-flight frame across
+runs, and one run reported a 3154 ms flight that never reproduced; only the
+landing-window figures above were taken from a quiet run. And the 1.4 s backstop is
+unchanged, so a round whose prompt somehow arrives later than 1.4 s would still be
+governed by the timer.

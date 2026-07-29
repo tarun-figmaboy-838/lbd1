@@ -247,6 +247,24 @@ var Game = (function () {
       E.setActive(btn, true);
       E.clearClicks(btn);              // onClick.RemoveAllListeners()
       E.addClick(btn, function () { self.handleNextClick(btn); });
+
+      // If this message is the one asking for a number, make the strip answerable
+      // NOW instead of waiting on callSetButtonSetWhenActive's fixed 1.4 s timer.
+      // Measured from the bag filling: the caption "Click on the number of gems
+      // found so far" starts typing at +733..985 ms (it varies with the winner
+      // clip's length) but the strip only became interactable at +1417 ms. For
+      // 430-680 ms the game asked for a tap and then ignored it, which is what
+      // reads as the bag lagging -- the child taps and nothing answers.
+      //
+      // Tying it to the message removes the race outright: a fixed delay cannot
+      // track a prompt whose start time depends on the preceding voice-over. The
+      // 1.4 s timer is left in place as a harmless idempotent backstop.
+      // currentCollectedGemsIndex is already updated by then -- incrementGemIndex()
+      // runs 1 ms after the bag fills, long before this prompt.
+      var strip = this.Number_btn || [];
+      for (var s = 0; s < strip.length; s++) {
+        if (String(strip[s]) === String(btn)) { this.applyButtonSet(); break; }
+      }
     }
     this.messageIndex++;
   };
