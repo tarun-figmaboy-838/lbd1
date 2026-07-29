@@ -29,9 +29,12 @@ var Engine = (function () {
   var scaleMode = 1, matchMode = 1, match = 0.5, scaleFactor = 1;
   var colorSpace = 0;
   var canvasScale = 1, stageW = 1920, stageH = 1080;
-  // How far the canvas may grow past the reference resolution before the view
-  // letterboxes instead. See computeScale() for how these were measured.
-  var MAX_EXPAND_W = 1.45, MAX_EXPAND_H = 1.35;
+  // The canvas is LOCKED to the reference resolution: 1 means it never grows past
+  // 1920x1080, so the composition is identical on every screen and the view
+  // letterboxes instead of reflowing. Raise these to allow Unity's Expand to use
+  // spare space again (1.45 / 1.35 was the previous, measured setting; very large
+  // values restore plain uncapped Expand). See computeScale().
+  var MAX_EXPAND_W = 1, MAX_EXPAND_H = 1;
   var resizeHooks = [], tickHooks = [];
   var audioUnlocked = false, pendingAudio = [];
   // A one-shot line queued longer than this is stale: the learner has moved on.
@@ -808,11 +811,16 @@ var Engine = (function () {
     // props stayed in a band at y=374..667, leaving 52% of the screen empty cave.
     // Nothing was cropped or stretched, but the composition came apart.
     //
-    // So cap how far the canvas may expand and centre what is left. Within the cap
-    // the behaviour is exactly Unity's; past it the view letterboxes instead of
-    // tearing. The caps are measured, not guessed: an ultrawide 3440x1440 needs
-    // 1.344x width and looks right, and iPad landscape (1024x768, 1366x1024) needs
-    // 1.333x height and also looks right, so both sit just inside.
+    // So the canvas is locked to the reference resolution and centred: the stage is
+    // always exactly 1920x1080, scaled by min(w/1920, h/1080), with whatever is left
+    // over as letterbox. Nothing reflows, nothing squeezes, and the scene is
+    // pixel-identical on every screen -- the only thing a viewport changes is how big
+    // it is drawn. An intermediate revision instead capped expansion at 1.45x/1.35x
+    // so that near-16:9 screens could still use spare space, but that made the
+    // framing subtly different per device; locking is the predictable choice.
+    //
+    // Note the scale itself is unchanged by the lock, so touch-target sizes and
+    // js/touch.js's padding are unaffected.
     stageW = Math.min(W / s, refW * MAX_EXPAND_W);
     stageH = Math.min(H / s, refH * MAX_EXPAND_H);
     stage.style.width = stageW + 'px';

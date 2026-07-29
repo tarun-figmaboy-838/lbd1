@@ -532,3 +532,70 @@ surfaces in the game. **RMSE under-penalises structured error like texture remov
 a scalar inside budget is not evidence the pixels survived. A high-frequency-energy
 ratio was added alongside RMSE to make that visible, and the whole 308 KB was
 discarded.
+
+## 16. Canvas locked to 16:9 — 2026-07-29 (supersedes §14's caps)
+
+§14 capped canvas expansion at 1.45×/1.35× so near-16:9 screens could still use spare
+space. That kept 12 of 15 viewports byte-identical, but it also meant the framing
+differed subtly per device, and a portrait window still drew the scene at 63% of the
+screen height. The brief became **16:9 everywhere, responsive on all devices**, so the
+canvas is now locked: `MAX_EXPAND_W = MAX_EXPAND_H = 1`.
+
+The stage is always exactly **1920×1080**, scaled by `min(w/1920, h/1080)`, centred,
+with the cave art filling the letterbox. Nothing reflows and nothing squeezes — the
+only thing a viewport changes is how large the scene is drawn.
+
+| Check | Result |
+|---|---|
+| Stage model, all 15 viewports | **1920×1080** on every one |
+| Painted aspect ratio | **1.7778** — exact 16:9, measured on phone landscape and portrait window |
+| Smallest touch target, all 15 | **48.0 CSS px** (the lock does not change the scale, so `js/touch.js` is unaffected) |
+| Anything mostly offscreen | **0** viewports |
+| Page scroll | **0** viewports |
+| Console/page errors | **0** |
+| Nine-round playthrough | 9/9 rounds, **18 taps**, ends on "Well Done! You collected all the gems!", flights **1304–1307 ms**, 0 console errors |
+
+### The gate now measures playability, not orientation
+
+Locking the canvas made orientation the wrong thing to gate on: an iPad in portrait
+draws the whole scene at 48 px targets and plays fine, while a 568×320 phone in
+*landscape* is the tighter case. `js/orientation.js` now blocks on canvas scale.
+
+The strip is 108×105 stage px and `js/touch.js` can pad it by at most half the 47.5 px
+neighbour gap, so the largest reachable target is about `150.4 × scale` CSS px. Apple's
+44 px floor needs `scale ≥ 0.293`. Measured against that model:
+
+| Viewport | Scale | Target | Result |
+|---|---|---|---|
+| 568×320 phone landscape | 0.2958 | **44.0** — model predicted 44 | plays |
+| 740×360 / 667×375 / 844×390 landscape | 0.333–0.361 | 48 | plays |
+| 1024×768 iPad landscape | 0.5333 | 56 | plays |
+| **768×1024 iPad portrait** | 0.400 | **48** | **plays** |
+| **863×1034 portrait window** | 0.4495 | **48** | **plays** |
+| 390×844 phone portrait | 0.2031 | 29.6 | blocked |
+| 480×320 | 0.25 | 36.9 | blocked |
+
+`?allowportrait=1` (or `Orientation.allowPortrait()`) suppresses the gate entirely,
+because an LMS or app embed fixes the frame and a child cannot rotate out of it.
+
+**Not verified:** the wording branch. `canRotate()` tests
+`(hover: none) and (pointer: coarse)`, which headless Chrome reports as false, so only
+the "Please make the window bigger" copy was exercised. A real phone should read
+"Please turn your device".
+
+### Two harness traps worth recording
+
+- **A caption regex matched the wrong line.** The playthrough exit condition tested
+  `/Well Done/i`, which also matches the *random praise* clip "Well Done" — not just
+  the final "Well Done! You collected all the gems!". One run therefore stopped a tap
+  early with 17 taps and number 9 still waiting, looking like a game defect. It is
+  not: match `/collected all the gems/i`. Earlier runs passed only because they drew a
+  different praise line.
+- **This machine drops `resize` events under memory pressure.** One run had
+  `Engine.dump()` still reporting a previous viewport's stage, so both the engine's and
+  the orientation module's resize handlers had silently stopped firing, and the gate
+  looked broken when its logic was correct. `Orientation.apply()` is now exported so
+  the logic can be tested without depending on event delivery, and `protocolTimeout`
+  is raised to 180 s. Frame timings measured while this host is thrashing are not
+  trustworthy — one run reported a 3154 ms flight and a 3013 ms frame that did not
+  reproduce.
