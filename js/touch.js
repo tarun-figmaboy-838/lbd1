@@ -108,8 +108,10 @@ var TouchTargets = (function () {
 
     for (i = 0; i < all.length; i++) {
       var q = all[i], p = padFor(q, all), el = q.rec.el;
-      // the ::before lives inside the scaled stage, so the inset is in stage px
-      if (p[0] <= 0.5 && p[1] <= 0.5) {
+      // the ::before lives inside the scaled stage, so the inset is in stage px.
+      // The skip threshold is only meant to catch "no pad needed at all" -- at 0.5 it
+      // left the 863x1034 portrait window at 47.2 px, 0.8 short of the target.
+      if (p[0] <= 0.01 && p[1] <= 0.01) {
         el.classList.remove('un-hit');
         el.style.removeProperty('--hitX');
         el.style.removeProperty('--hitY');

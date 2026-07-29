@@ -55,9 +55,9 @@ pulse-result.json
 shots/
 shots[0-9]/
 
-# ---- original PNG/GIF/MP3 sources, kept for reference ----
-# The shipped assets are WebP + OGG. These are the pre-conversion originals;
-# safe to delete once the conversion is signed off.
+# ---- original PNG/GIF/MP3 sources ----
+# Deleted 2026-07-29 once the WebP/OGG conversion and the compression pass were
+# signed off. The rule stays so a re-export from Unity is not committed by accident.
 assets/_src-original/
 
 # ---- build / deploy artefacts ----

@@ -44,11 +44,19 @@ lbd1/
 
 ## Assets
 
-All artwork ships as **WebP** (60 files, 2.4 MB — down from 9.4 MB of PNG) and all
-audio as **OGG** (25 files). 47 images converted lossless and verified bit-exact;
-12 larger ones at q92/q96 with zero alpha deviation and a worst alpha-weighted
-visible RMSE of 5.5. Pre-conversion originals sit in `assets/_src-original/`,
-gitignored and safe to delete.
+All artwork ships as **WebP** (60 files, 2.18 MB — down from 9.4 MB of PNG) and all
+audio as **OGG** (25 files, 1.05 MB). 47 images converted lossless and verified
+bit-exact; 12 larger ones at q92/q96 with zero alpha deviation and a worst
+alpha-weighted visible RMSE of 5.5.
+
+A second pass in July 2026 took the total payload to **3.52 MB**: `bg.ogg` was
+re-encoded from 113 kb/s stereo to 64 kb/s (975,962 → 500,440 bytes, duration drift
+0.000 s), and five still-lossless images went to near-lossless at a measured RMSE
+below 1.0 against what shipped. The 24 voice-over clips were left untouched on
+purpose — they are the source encoding and a second lossy pass on children's speech
+was not worth ~260 KB. The pre-conversion PNG/MP3 originals have been deleted; a
+future re-encode would need a fresh export from Unity. Text needs no attention:
+Vercel brotli-compresses `js/data.js` from 138,553 to 11,326 bytes on the wire.
 
 ## Loading
 

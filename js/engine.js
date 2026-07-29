@@ -29,6 +29,9 @@ var Engine = (function () {
   var scaleMode = 1, matchMode = 1, match = 0.5, scaleFactor = 1;
   var colorSpace = 0;
   var canvasScale = 1, stageW = 1920, stageH = 1080;
+  // How far the canvas may grow past the reference resolution before the view
+  // letterboxes instead. See computeScale() for how these were measured.
+  var MAX_EXPAND_W = 1.45, MAX_EXPAND_H = 1.35;
   var resizeHooks = [], tickHooks = [];
   var audioUnlocked = false, pendingAudio = [];
   // A one-shot line queued longer than this is stale: the learner has moved on.
@@ -795,12 +798,28 @@ var Engine = (function () {
       s = scaleFactor;
     }
     canvasScale = s;
-    // Screen Space - Camera canvas: canvas rect = viewport px / scaleFactor
-    stageW = W / s;
-    stageH = H / s;
+    // Screen Space - Camera canvas: canvas rect = viewport px / scaleFactor.
+    //
+    // Unity's Expand grows the canvas without limit in whichever axis is not the
+    // binding one. On a 16:9 design that is fine while the viewport stays near 16:9,
+    // but at 0.835 aspect (a portrait window, 863x1034) it made the canvas
+    // 1920x2300 -- 2.13x the authored height. Everything anchored to an edge went to
+    // that edge: the caption sat at y=39, the number strip at y=975, and the nine
+    // props stayed in a band at y=374..667, leaving 52% of the screen empty cave.
+    // Nothing was cropped or stretched, but the composition came apart.
+    //
+    // So cap how far the canvas may expand and centre what is left. Within the cap
+    // the behaviour is exactly Unity's; past it the view letterboxes instead of
+    // tearing. The caps are measured, not guessed: an ultrawide 3440x1440 needs
+    // 1.344x width and looks right, and iPad landscape (1024x768, 1366x1024) needs
+    // 1.333x height and also looks right, so both sit just inside.
+    stageW = Math.min(W / s, refW * MAX_EXPAND_W);
+    stageH = Math.min(H / s, refH * MAX_EXPAND_H);
     stage.style.width = stageW + 'px';
     stage.style.height = stageH + 'px';
-    stage.style.transform = 'scale(' + s + ')';
+    var offX = Math.round((W - stageW * s) / 2);
+    var offY = Math.round((H - stageH * s) / 2);
+    stage.style.transform = 'translate(' + offX + 'px,' + offY + 'px) scale(' + s + ')';
     stage.style.transformOrigin = '0 0';
     if (fxCanvas) {
       fxCanvas.width = Math.round(stageW);

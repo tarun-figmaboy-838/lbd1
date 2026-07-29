@@ -446,3 +446,89 @@ carries no content, and the 0.4 scale that results is what made the buttons smal
 Fixing the *framing* would mean re-composing the scene for portrait, which is a
 design decision rather than a responsive fix, so only the touch-target consequence
 was addressed. Portrait **phones** are still asked to rotate, unchanged.
+
+## 14. Canvas expansion capped, extreme aspects letterbox — 2026-07-29
+
+§13.3 left the portrait framing alone as "not broken". Reported from a real
+863×1034 window, that was the wrong call. Measured there:
+
+| | Before | After |
+|---|---|---|
+| Stage model | **1920 × 2300** (2.13× the authored height) | **1920 × 1458** |
+| Caption top | y=39 — pinned to the screen edge | **y=228** |
+| Props band | y=374–667 | y=374–667 (unchanged) |
+| Number strip top | y=975 — pinned to the screen edge | **y=785** |
+| Empty screen | **542 px of 1034 = 52%** | 189 px + 190 px of letterbox |
+
+Unity's `Expand` grows the canvas without limit in whichever axis is not binding.
+Near 16:9 that is useful; at 0.835 aspect it flung everything anchored to an edge to
+that edge and left the nine props in a thin band in the middle. Nothing was cropped
+or stretched — the composition simply came apart.
+
+`computeScale()` now caps expansion at `MAX_EXPAND_W = 1.45` / `MAX_EXPAND_H = 1.35`
+and centres what is left. Both caps are measured, not guessed: ultrawide 3440×1440
+needs 1.344× width and looks right, and iPad landscape needs 1.333× height and also
+looks right (screenshot inspected), so both sit just inside the cap and are
+untouched. `body` background moved from `#000` to `#133a50`, sampled from the top and
+bottom edges of `mystical_cave_2` (both exactly `rgb(19,58,80)`), so the letterbox
+reads as cave rather than as a black bar.
+
+| Check | Result |
+|---|---|
+| Viewports with framing **unchanged** | **12 of 15** — every landscape phone, all three iPad landscapes, laptops, desktop, 2560×1440, ultrawide |
+| Viewports newly letterboxed | 3 — the 863×1034 window, iPad mini portrait, iPad Pro 11 portrait |
+| Smallest touch target, all 15 viewports | **48.0 CSS px** |
+| Anything mostly offscreen | **0** viewports |
+| Page scroll | **0** viewports |
+| Console/page errors | **0** |
+| Nine-round playthrough | 9/9, flights 1304–1309 ms, worst in-flight frame 23.3 ms, **0 janky frames** |
+
+Two measurement notes worth keeping. The touch guarantee first read **47.2 px** on the
+863×1034 window because `js/touch.js` skipped pads under 0.5 px as noise, leaving it
+0.8 px short; the threshold is now 0.01 px and it reads 48.0. And one playthrough
+reported a 3154 ms gem flight with a 3013 ms frame — it did not reproduce (all nine
+flights 1304–1309 ms, 0 janky frames on re-run), total frames were down 27% that run,
+and the host was swapping hard enough that PowerShell could not start the CLR. Frame
+timings measured while this machine is thrashing are not trustworthy; re-run before
+believing one.
+
+## 15. Payload compression — 2026-07-29
+
+**4.02 MB → 3.52 MB.** Saved 508,582 bytes.
+
+| Asset | Before | After | How |
+|---|---|---|---|
+| `bg.ogg` | 975,962 | **500,440** | 113 kb/s stereo → 64 kb/s, which libvorbis couples to ~58 kb/s actual. Duration **68.690 s → 68.690 s, drift 0.000 s** |
+| `stalagmite.webp` | 36,582 | 28,700 | near-lossless 40, RMSE **0.946** |
+| `statue.webp` | 35,106 | 27,644 | near-lossless 60, RMSE **0.892** |
+| `Frame_289.webp` | 34,794 | 24,582 | near-lossless 60, RMSE **0.992** |
+| `floor_crack.webp` | 17,056 | 12,698 | near-lossless 60, RMSE **0.909** |
+| `rock_crevice.webp` | 14,994 | 11,848 | near-lossless 60, RMSE **0.684** |
+
+Verified after: `bg.ogg` reaches `playing` under the real autoplay policy with 0
+rejections at its authored volume 0.2, and a nine-round playthrough runs 9/9 with
+flights 1305–1310 ms, worst in-flight frame 20.1 ms, 0 janky frames, 0 console errors.
+
+### What was deliberately NOT compressed, and why
+
+- **Text — already solved.** Vercel brotli-compresses it: `js/data.js` 138,553 →
+  **11,326 bytes** on the wire, `js/engine.js` 65,213 → 21,413, `css/style.css`
+  7,054 → 2,294. Nothing to gain.
+- **The other 55 images.** 39 reproduce **byte-for-byte** at a q92/q96 re-encode, so
+  they are already at their authored quality. For the rest nothing inside an RMSE ≤ 1.0
+  budget was smaller, and max-effort lossless never beat what ships.
+- **The 24 voice-over clips.** They are the source encoding, mostly already ~70 kb/s
+  mono. Re-encoding to 48 kb/s would have saved ~260 KB by putting a second lossy pass
+  on children's speech instruction — not a trade worth making.
+
+### A 308 KB "win" that was measured, then thrown away
+
+A first pass approved q68 for nine images on an alpha-weighted RMSE ≤ 2.6 budget,
+including `mystical_cave_2` at 114,746 → 13,604 (RMSE 2.23) and
+`bottom_strip_expanded` at 51,386 → 8,768 (RMSE 2.57). Rendering the crops side by
+side showed q68 stripping the grain out of the cave background and flattening the
+stone number strip into a smooth wash — clearly worse, on the two most-visible
+surfaces in the game. **RMSE under-penalises structured error like texture removal**;
+a scalar inside budget is not evidence the pixels survived. A high-frequency-energy
+ratio was added alongside RMSE to make that visible, and the whole 308 KB was
+discarded.

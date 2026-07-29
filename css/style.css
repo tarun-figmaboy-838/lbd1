@@ -3,7 +3,11 @@
 /* uGUI runtime stylesheet -- shared by all three builds */
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body {
-  width:100%; height:100%; overflow:hidden; background:#000;
+  /* Sampled from the top and bottom edge of mystical_cave_2 (both rgb(19,58,80)).
+     Only visible as the letterbox at aspect ratios past the expansion cap in
+     engine.js computeScale(); matching the cave makes that read as part of the
+     scene instead of as a black bar. */
+  width:100%; height:100%; overflow:hidden; background:#133a50;
   -webkit-user-select:none; user-select:none;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation; overscroll-behavior:none;
