@@ -41,6 +41,7 @@ These are faithful to the Unity project and are deliberately **not** "fixed".
   transparent sprite** (23% of the width). The element box is therefore a poor
   proxy for the visible hand — at `localScale` 0.2 the box is 240 px but the hand
   is 55×69 px. Measure the artwork, not the rect, before judging its size.
+| Stray carriage returns are stripped from every dialogue message, and the three caption slots sit at `anchoredPosition [-48.83, 22]`. | Five of the "N gems collected!" lines carried a LEADING `` (Three..Seven) and nine "Click on the number..." lines a TRAILING one. | TMP wrap is on, so the engine renders with `white-space: pre-wrap` and a stray CR becomes a real line break. With vertical alignment set to middle, a leading CR dropped the visible line by half a line height and a trailing CR lifted it — which is exactly why Three through Seven sat lower than One, Two, Eight and Nine. All 16 distinct lines now render at an identical glyph centre, measured spread **0.0 px**. Only leading/trailing control characters inside message values were touched. |
 
 ## Deliberate departures from the Unity scene
 

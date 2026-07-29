@@ -72,3 +72,5 @@ build/
 .env
 .env.*
 !.env.example
+
+.vercel

@@ -10,8 +10,8 @@
  *
  *   1. The hand artwork is only 276x347 px of content inside a 1200x1200 mostly
  *      transparent sprite (23% of the width). The element box is therefore a poor
- *      proxy for the hand -- at localScale 0.3 the box is 360 px but the visible
- *      hand is 83x104 px.
+ *      proxy for the hand -- at localScale 0.2 the box is 240 px but the visible
+ *      hand is 55x69 px.
  *   2. The fingertip -- the topmost opaque pixel, centroid of the first rows --
  *      sits at (557, 619) of 1200x1200, i.e. fraction (0.4644, 0.5158).
  *
@@ -95,20 +95,6 @@ var Hint = (function () {
       }
     }
     return E.centerOf(btn ? btn.id : parent.id);
-  }
-
-  /** The fingertip's current position in stage px, read off the rendered box. */
-  function renderedTip(hand) {
-    var cs = E.scale() || 1;
-    var st = document.getElementById('stage');
-    if (!st) return null;
-    var sr = st.getBoundingClientRect();
-    var hr = hand.el.getBoundingClientRect();
-    if (!hr.width || !hr.height) return null;
-    return [
-      (hr.left - sr.left) / cs + TIP.x * (hr.width / cs),
-      (hr.top - sr.top) / cs + TIP.y * (hr.height / cs)
-    ];
   }
 
   /** The overlay, created once, stacked above the FX canvas inside #stage. */

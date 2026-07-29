@@ -1,0 +1,10 @@
+# Pre-conversion PNG/GIF/MP3 originals — the site ships WebP + OGG only.
+assets/_src-original/
+
+# Local tooling and notes that are not part of the served site.
+.claude/
+CreditManagement.md
+GOD-MODE.md
+tools/
+node_modules/
+*.log
