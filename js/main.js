@@ -12,6 +12,9 @@
   if (typeof Orientation !== 'undefined') Orientation.init();
   E.boot(splashRoots.concat(playRoots), C);
   if (typeof Hint !== 'undefined') Hint.init();
+  // Must follow boot(): it measures painted buttons, and it re-measures itself on
+  // every resize and activation change.
+  if (typeof TouchTargets !== 'undefined') TouchTargets.init(E);
 
   var playRootState = playRoots.map(function (r) {
     return { id: String(r.id), active: !!r.active };

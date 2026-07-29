@@ -8,7 +8,20 @@ html, body {
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation; overscroll-behavior:none;
 }
-#viewport { position:fixed; inset:0; overflow:hidden; }
+/* Inset to the safe area, not to the raw viewport. index.html asks for
+   viewport-fit=cover, so on a notched phone the raw viewport runs underneath the
+   notch and the home indicator -- and this game puts the number strip 26 stage px
+   off the bottom edge, right where the indicator sits. Insetting the element (not
+   padding it) is what matters: engine.js reads viewport.clientWidth/clientHeight to
+   pick the canvas scale, and clientWidth includes padding but not offsets. The
+   fallbacks are 0px, so every non-notched device is completely unaffected. */
+#viewport {
+  position:fixed; overflow:hidden;
+  top:env(safe-area-inset-top, 0px);
+  right:env(safe-area-inset-right, 0px);
+  bottom:env(safe-area-inset-bottom, 0px);
+  left:env(safe-area-inset-left, 0px);
+}
 #stage { position:absolute; left:0; top:0; transform-origin:0 0; }
 
 /* every Unity GameObject becomes one absolutely positioned div */
@@ -21,6 +34,22 @@ html, body {
 
 .un-btn { -webkit-user-select:none; user-select:none; }
 .un-btn.un-dis { pointer-events:none; }
+
+/* Minimum touch target -- see js/touch.js. The pseudo-element extends the
+   catchable area outward without moving or repainting anything, and a hit on it
+   resolves to the originating button. The insets are in stage px because this box
+   lives inside #stage's scale() transform. It carries no background, so it changes
+   nothing visually. Deliberately NOT z-index:-1: that would push it behind the
+   panel node it overhangs, and the panel would swallow the tap instead. */
+.un-btn.un-hit::before {
+  content:''; position:absolute;
+  left:calc(-1 * var(--hitX, 0px)); right:calc(-1 * var(--hitX, 0px));
+  top:calc(-1 * var(--hitY, 0px)); bottom:calc(-1 * var(--hitY, 0px));
+}
+/* No un-dis rule is needed here: pointer-events is an inherited property, so the
+   box already follows whatever the button itself does, and ensureClick() returns
+   early on `!r.interactable` regardless. An explicit rule here only made the
+   expanded area behave differently from the button it belongs to. */
 .un-press { }
 
 /* Unity Button ColorTint transition: multiply the target graphic's colour */

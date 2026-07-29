@@ -150,6 +150,9 @@ Checked and deliberately left alone. See `reports/known-approximations.md`.
 `min(w/1920, h/1080)` — Unity `Expand`. The canvas grows in the shorter axis
 rather than cropping or stretching, so composition never rearranges.
 
+**Update 2026-07-29 — re-measured on real device viewports; two defects found and
+fixed. See §13.** The table below records framing only, which is still accurate.
+
 | Viewport | Scale | Canvas | Strip button | Page scroll | Verdict |
 |---|---|---|---|---|---|
 | 2560×1440 | 1.3333 | 1920×1080 | 144 px | none | pass |
@@ -358,3 +361,88 @@ The remaining live non-zero delay is `ChatTextEnd` at **5 s**
 (`scripts[18].tutorials[8].messages[4]`), the finale caption. It has nothing to be
 consistent with — it is a one-off end beat, and it matches the final line's
 `autoAdvanceDelay` of 5. Left as authored.
+
+## 13. Responsive on real devices — 2026-07-29
+
+Re-measured across 19 real device viewports in Chrome, reading the painted DOM
+rather than the layout model. Framing was already correct everywhere — no
+letterboxing, no stretching, no page scroll, 0 console errors, and the cave art
+covers the viewport at every aspect from 0.46 to 2.39. Two real defects turned up.
+
+### 13.1 Touch targets were below the platform minimum on every phone
+
+The nine number-strip buttons are 108×105 stage px, and Expand mode shrinks them
+with the viewport:
+
+| Device viewport | Scale | Painted | Effective now |
+|---|---|---|---|
+| 740×360 Galaxy S8 landscape | 0.3333 | **35.0** | **48.0** |
+| 667×375 iPhone SE landscape | 0.3472 | **36.5** | **48.0** |
+| 844×390 iPhone 12 landscape | 0.3611 | **37.9** | **48.0** |
+| 915×412 Pixel 7 landscape | 0.3815 | **40.1** | 48.0 |
+| 932×430 iPhone 14 Pro Max landscape | 0.3981 | **41.8** | 48.0 |
+| 768×1024 iPad mini portrait | 0.4000 | **42.0** | **48.0** |
+| 1024×768 iPad mini landscape | 0.5333 | 56.0 | 56.0 (no pad needed) |
+| 1920×1080 desktop | 1.0000 | 105.0 | 105.0 (no pad needed) |
+
+Apple asks for 44 px, Google for 48 dp; this game is for five-year-olds, whose aim
+is worse than an adult's. Every phone was under both.
+
+`js/touch.js` grows an invisible `::before` on each button until the catchable area
+reaches 48 CSS px. Nothing moves and nothing repaints — the composition the scene
+was authored with is untouched, only the catchable area changes. The expansion is
+capped at just under half the measured clear distance to the nearest
+simultaneously-tappable button, so a near-miss always resolves to the closest
+button. That distance is measured live (47.5 stage px between strip neighbours), not
+hardcoded, so the cap stays right if the strip is ever re-laid-out.
+
+Verified with the strip **enabled** (see the trap below), on six viewports:
+
+| Check | Result |
+|---|---|
+| Smallest effective target | **48.0 CSS px** on every phone, at or above target |
+| `::before` `pointer-events` when interactable | `auto` on all six viewports |
+| Probes just inside each expanded edge (L/R/bottom × 9 buttons) | **27/27 resolve to the correct button**, on all six viewports |
+| Taps resolving to a *neighbouring* button | **0** on all six viewports |
+| Expanded boxes overlapping each other | **0** on all six viewports |
+| Real click 6.5 CSS px into the margin | **registers** |
+| Control click 6 px *beyond* the pad | **does not register** — the expansion is bounded, not a catch-all |
+| Nine-round playthrough after the change | 9/9 rounds, flights 1304–1307 ms, 0 janky frames, 0 console errors |
+
+**A trap that cost a full test cycle:** the first verification probed the strip while
+every button was still `un-dis` — the strip is disabled until a gem is collected —
+and reported 0/27. That was correct behaviour on a disabled control, not a broken hit
+area. Any future test of this must collect a gem first. The same run also read
+geometry after a fixed `sleep` instead of waiting for the new scale to land, so two
+rows reported the *previous* viewport's numbers; wait on `Engine.dump().canvasScale`
+changing instead.
+
+### 13.2 Nothing accounted for notches or the home indicator
+
+`index.html` asks for `viewport-fit=cover`, so on a notched phone the raw viewport
+runs underneath the notch and the home indicator — and this game puts the number
+strip only 26 stage px off the bottom edge, which is 9.4 CSS px on an iPhone 12 in
+landscape, well inside the ~21 px the home indicator occupies. Nothing in the CSS
+referenced `env(safe-area-inset-*)`.
+
+`#viewport` is now inset by the four safe-area insets. Insetting the element is what
+matters rather than padding it: `engine.js` reads `viewport.clientWidth/clientHeight`
+to choose the canvas scale, and `clientWidth` includes padding but not offsets. Every
+fallback is `0px`, and the measured scales after the change are identical to before
+(0.3333 / 0.3472 / 0.3611 / 0.4 / 0.5333 / 1), which confirms it is a no-op wherever
+the insets are zero.
+
+**Not verified in a browser:** headless Chrome reports zero safe-area insets, so the
+no-op case is proven but the notched case is not. It needs a real iPhone in landscape
+to confirm the strip clears the home indicator.
+
+### 13.3 Framing at extreme aspect ratios — left as is
+
+At tablet portrait (0.75) the props sit in a band across the middle with the caption
+panel pinned to the top and the number strip to the bottom, leaving a tall empty
+cave ceiling between them. It is not broken — nothing is cropped, stretched or
+unreachable, and the UI does use the extra height — but roughly 45% of the screen
+carries no content, and the 0.4 scale that results is what made the buttons small.
+Fixing the *framing* would mean re-composing the scene for portrait, which is a
+design decision rather than a responsive fix, so only the touch-target consequence
+was addressed. Portrait **phones** are still asked to rotate, unchanged.
