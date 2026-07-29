@@ -1069,7 +1069,7 @@ var Engine = (function () {
     a.volume = opts.volume != null ? opts.volume : ch.vol;
     a.loop = !!opts.loop;
     ch.el = a; ch.src = src;
-    tryPlay(a);
+    tryPlay(a, chName);
   }
   function playOneShot(src, volume) {
     var base = clip(src); if (!base) return;
@@ -1081,13 +1081,34 @@ var Engine = (function () {
     var ch = channels[chName];
     if (ch && ch.el) { try { ch.el.pause(); ch.el.currentTime = 0; } catch (e) { } }
   }
-  function tryPlay(a) {
+  /**
+   * play() returns a promise that settles when playback actually begins, and it
+   * REJECTS with AbortError if anything pauses the element while it is still
+   * getting there. A voice-over was being lost that way roughly once a
+   * playthrough: two dialogue lines landing on the same channel inside the load
+   * window meant the second one's pause() killed the first's pending play, and
+   * the rejection was swallowed silently. Retrying once on the next tick recovers
+   * it, unless the channel has genuinely moved on to a different clip.
+   */
+  function tryPlay(a, chName, retried) {
     var p = a.play();
-    if (p && p.catch) {
-      p.catch(function () {
-        if (!audioUnlocked && pendingAudio.length < 8) pendingAudio.push(a);
-      });
-    }
+    if (!p || !p.catch) return;
+    p.catch(function (err) {
+      if (!audioUnlocked) {
+        if (pendingAudio.length < 8) pendingAudio.push(a);
+        return;
+      }
+      var name = err && err.name;
+      var ch = chName ? channels[chName] : null;
+      var stillCurrent = !ch || ch.el === a;
+      if (!retried && name === 'AbortError' && stillCurrent) {
+        setTimeout(function () {
+          if (!ch || ch.el === a) tryPlay(a, chName, true);
+        }, 0);
+        return;
+      }
+      if (name && name !== 'AbortError') logErr(err);
+    });
   }
   function unlockAudio() {
     if (audioUnlocked) return;

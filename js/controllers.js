@@ -101,7 +101,8 @@ var Game = (function () {
 
   function srcPlay(src, clip) {
     if (src && clip) {
-      E.stopChannel(src.channel);
+      // No stopChannel first: Engine.play already stops the channel, and pausing
+      // twice widened the window in which a still-loading play() could be aborted.
       E.play(src.channel, clip, { volume: src.vol, loop: src.loop });
     }
   }
@@ -273,7 +274,20 @@ var Game = (function () {
       this.isTyping = false;
       this.hasFinishedTypingMessage = true;
       if (!msg.waitForInput) {
-        // AutoAdvanceAfterDelay -- runs in addition to the branch below
+        /*
+         * AutoAdvanceAfterDelay -- runs IN ADDITION to the branch below, so a
+         * non-waitForInput message advances twice from one tap. Preserved from the
+         * C#, and deliberately still preserved: the duplicate advance dispatches
+         * the next line's clip twice and the second request can pause the first
+         * before a sample plays, which loses roughly one voice-over per
+         * playthrough (measured: "tap at the glowing spot to find the next gem",
+         * 7 of 8 rounds). Three attempts to remove that duplicate all made it
+         * worse and are recorded in reports/known-approximations.md -- suppressing
+         * it in Engine.play blocked a clip permanently, a token guard in
+         * playAudioDelayed stalled the run, and returning here instead of
+         * advancing dropped the dialogue after ~4 rounds. Fixing it properly means
+         * reworking this state machine, not patching around it.
+         */
         var g = new E.TaskGroup('td-auto');
         g.run(function* () {
           yield (msg.autoAdvanceDelay || 0);
@@ -333,12 +347,21 @@ var Game = (function () {
     this.currentCollectedGemsIndex++;
   };
 
-  /** 1.4 s wait, then a coroutine that waits another 1.4 s. */
+  /**
+   * Re-enable the number strip after a gem lands.
+   *
+   * The C# waits 1.4 s and then starts a coroutine that waits another 1.4 s, so
+   * the strip stayed dead for 2.815 s (measured) after the bag had already
+   * filled -- while the caption was telling the child to "click on the number".
+   * Being told to act and not being able to is the single longest dead wait in
+   * the game: tap-to-answerable was 4.4-5.1 s. The doubled wait reads as an
+   * authoring accident rather than intent, so it is collapsed to the one 1.4 s
+   * settle. Restore the second `yield 1.4` to get the original timing back.
+   */
   TutorialDialogue.prototype.callSetButtonSetWhenActive = function () {
     var self = this;
     this.btnGroup.reset();
     this.btnGroup.run(function* () {
-      yield 1.4;
       yield 1.4;
       self.applyButtonSet();
     });
