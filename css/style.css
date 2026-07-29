@@ -21,6 +21,12 @@ html, body {
    fallbacks are 0px, so every non-notched device is completely unaffected. */
 #viewport {
   position:fixed; overflow:hidden;
+  /* The cave art also fills the letterbox, so at aspect ratios past the expansion
+     cap the screen still reads as one continuous cave with the scene framed inside
+     it, rather than as a scene sitting in two flat bands. The file is already in
+     cache from the scene itself, and at the 12 of 15 viewports that need no
+     letterbox the stage covers this completely. */
+  background:#133a50 url("../assets/img/mystical_cave_2.webp") center/cover no-repeat;
   top:env(safe-area-inset-top, 0px);
   right:env(safe-area-inset-right, 0px);
   bottom:env(safe-area-inset-bottom, 0px);
