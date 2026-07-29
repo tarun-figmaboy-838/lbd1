@@ -31,6 +31,8 @@ var Engine = (function () {
   var canvasScale = 1, stageW = 1920, stageH = 1080;
   var resizeHooks = [], tickHooks = [];
   var audioUnlocked = false, pendingAudio = [];
+  // A one-shot line queued longer than this is stale: the learner has moved on.
+  var STALE_AUDIO_MS = 8000;
   var rafId = null, lastT = 0;
   var particleSystems = [];
 
@@ -1094,11 +1096,24 @@ var Engine = (function () {
     var p = a.play();
     if (!p || !p.catch) return;
     p.catch(function (err) {
-      if (!audioUnlocked) {
-        if (pendingAudio.length < 8) pendingAudio.push(a);
+      var name = err && err.name;
+      /*
+       * Queue anything the autoplay policy refused, so the next tap can start it.
+       *
+       * This used to be gated on `!audioUnlocked`, and that flag is set by the
+       * first pointerdown anywhere on the page -- which happens long before the
+       * background music starts. So by the time bg.ogg was requested the engine
+       * believed audio was unlocked, and a NotAllowedError was dropped with no
+       * retry: the music simply never played. A pointerdown is not a promise that
+       * the browser will allow playback, only that it might.
+       */
+      if (name === 'NotAllowedError' || !audioUnlocked) {
+        if (pendingAudio.indexOf(a) < 0 && pendingAudio.length < 8) {
+          a.__queuedAt = Date.now();
+          pendingAudio.push(a);
+        }
         return;
       }
-      var name = err && err.name;
       var ch = chName ? channels[chName] : null;
       var stillCurrent = !ch || ch.el === a;
       if (!retried && name === 'AbortError' && stillCurrent) {
@@ -1110,12 +1125,27 @@ var Engine = (function () {
       if (name && name !== 'AbortError') logErr(err);
     });
   }
+  /**
+   * Runs on EVERY user gesture, not just the first. It used to return early once
+   * the flag was set, so the retry queue was drained exactly once -- anything
+   * blocked after that first tap stayed silent forever. Draining on each gesture
+   * is what lets the background music (or any refused clip) start at the first tap
+   * the browser actually honours.
+   */
   function unlockAudio() {
-    if (audioUnlocked) return;
     audioUnlocked = true;
-    while (pendingAudio.length) {
-      var a = pendingAudio.shift();
-      try { a.play(); } catch (e) { }
+    if (!pendingAudio.length) return;
+    var queued = pendingAudio.slice();
+    pendingAudio.length = 0;
+    var now = Date.now();
+    for (var i = 0; i < queued.length; i++) {
+      var a = queued[i];
+      // A looping track is the background music and is always worth starting.
+      // A one-shot line that has been waiting a while is stale: replaying it now
+      // would speak a caption the learner has long since moved past.
+      var fresh = a.loop || !a.__queuedAt || (now - a.__queuedAt) < STALE_AUDIO_MS;
+      if (!fresh) continue;
+      try { tryPlay(a); } catch (e) { logErr(e); }
     }
   }
   function audioDuration(src) {
