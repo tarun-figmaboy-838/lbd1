@@ -334,3 +334,27 @@ the caption, tap what it asks for — completed all nine rounds cleanly. Worth k
 in mind for any future automation of this scene: drive it from the caption, not from
 `tutorial.messageIndex`, which the preserved `handleNextClick` double-advance can move
 by two.
+
+### Reading `delayBeforeEnable` counts in `js/data.js` — a trap
+
+Grepping the shipped `data.js` gives 10 × `"delayBeforeEnable":0.2` and 10 × `":1`,
+which looks one-too-many against nine gems and one confetti burst. It is not a defect.
+`CONFIG.scripts` holds **two** `TutorialDialogue` copies, both with 9 tutorials and 39
+messages:
+
+| | host | active in hierarchy | gem `delayBeforeEnable` |
+|---|---|---|---|
+| `scripts[14]` | `1130232098` under `GameObject` | **false** — dead in Unity too | `[1,1,1,1,1,1,1,1,0.2]` |
+| `scripts[18]` | `1760113273` under `/GamePlay/BackGround/Top/ChatBox` | **true** | `[0.2 × 9]` |
+
+`Game.liveScript('TutorialDialogue')` in `js/main.js` picks the active one, so only
+`scripts[18]` ever runs — that is why the playthrough measured correctly. The dead
+copy is left in place on purpose: it is dead in the Unity scene as well, and `main.js`
+documents the reason at the call site. **Any future timing audit must filter on
+`activeInHierarchy(s.__host)` before tallying, or it will report phantom outliers
+from a script that never executes.**
+
+The remaining live non-zero delay is `ChatTextEnd` at **5 s**
+(`scripts[18].tutorials[8].messages[4]`), the finale caption. It has nothing to be
+consistent with — it is a one-off end beat, and it matches the final line's
+`autoAdvanceDelay` of 5. Left as authored.
