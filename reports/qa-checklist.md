@@ -301,3 +301,36 @@ edge is the gem bag at 9 px, which is authored.
 **60 assertions, 0 failures, 0 warnings.** The loading test is two-phase aware: it
 asserts the splash set is cached always, and the full manifest only once the
 background payload reports ready.
+
+## 12. Timing and speed consistency — 2026-07-29
+
+Same action, same duration, in every round. Audited from `js/data.js` first, then
+measured in a full nine-round playthrough in Chrome at 1920×1080.
+
+| Check | Before | After |
+|---|---|---|
+| Gem flight (pop + arc into the bag), 9 gems | 6 × 1.30 s, **3 × 2.00 s** | **all 9 at 1.30 s** |
+| Measured flight time, real playthrough | — | **1305, 1304, 1303, 1305, 1303, 1304, 1304, 1304, 1305 ms** (2 ms spread) |
+| Worst frame inside any flight | — | **15.8 ms**, 0 frames over 33 ms — the bag lands without a stutter |
+| `hand` reveal delay, 18 hands | 8 s × 9 props, **7 s × 9 strip** | **0 × 18** — the 5 s idle rule in `js/hint.js` is the only gate |
+| Measured hint latency, round 2 | — | **5006 ms** of idle (round 1 exempt at 2291 ms: that hint is the tutorial) |
+| `gem` reveal delay, 9 gems | 8 × 0.2 s, **1 × 1.0 s** (round 9) | **0.2 s × 9** |
+| `glow` / `Button` / `complation panel` reveal delay | 0 | 0 — already uniform |
+| Confetti burst delay | 1.0 s | **1.0 s, unchanged** — it shares the value `1` with the round-9 gem, so the gem was targeted by fileID `200327432`, not by value |
+| `resetDelay` on the 9 wrong-answer buttons | 2 × 9 | 2 × 9 — already uniform |
+| `CameraShake` scale / rotate / colour | 0.1 / 0.1 / 0.1, 1 loop | unchanged |
+| `autoAdvanceDelay`, rounds 2–9 | uniform per role (2.5 / 1.5 / 2.5 / 3.0) | unchanged |
+| `autoAdvanceDelay`, round 1 | 1.7, 1.8, 2.2, 1.0, 1.8 | **left as authored** — every outlier is in round 1 and only round 1, so the tutorial is internally consistent, just paced tighter. Out of scope for a consistency pass. |
+| Background music under the **real** autoplay policy (no bypass flag, audio unmuted) | never started — a refusal was discarded | **plays**: one `bg.ogg` attempt, reaches `playing`, **0 rejections** |
+| Full nine-round playthrough, caption-driven | — | **9/9 rounds, 18 taps, 0 console errors**, ends on "Well Done! You collected all the gems!" |
+
+### One harness finding worth recording
+
+Two earlier runs stalled at round 3 and round 7. That was the **test harness**, not
+the game: it tapped each number button the instant the button turned `interactable`,
+which can be before the dialogue has asked for it, and that tap was consumed with
+nothing waiting on it. Re-driving the same playthrough the way a learner does — read
+the caption, tap what it asks for — completed all nine rounds cleanly. Worth keeping
+in mind for any future automation of this scene: drive it from the caption, not from
+`tutorial.messageIndex`, which the preserved `handleNextClick` double-advance can move
+by two.
