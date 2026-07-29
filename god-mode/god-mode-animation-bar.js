@@ -21,7 +21,8 @@ window.GodModeAnimationBar = function () {
     var name = String(rec.data.name || '').toLowerCase();
     var path = U.pathOf(rec).toLowerCase();
     var sprite = rec.img && rec.img.sprite ? rec.img.sprite.path.toLowerCase() : '';
-    if (/^gem$/.test(name) || /gem\.png|_gem/.test(sprite)) return 'gem';
+    // Match the stem, not the extension -- assets moved from .png to .webp.
+    if (/^gem$/.test(name) || /_gem\.|gem\.(png|webp)/.test(sprite)) return 'gem';
     if (/bag|sack/.test(name) || /sack|empty_sack/.test(sprite)) return 'bag';
     if (name === 'hand' || /hand|frame_00/.test(sprite)) return 'hint';
     if (/gloweffect|glow/.test(name)) return 'glow';

@@ -45,9 +45,17 @@
     });
   }
 
+  // The splash appears as soon as its own art is decoded; the gameplay payload
+  // finishes behind it. Gate the hand-off so the scene is never entered
+  // half-loaded -- in practice it is ready long before the child taps.
+  function enterGameplay() {
+    if (typeof Preloader !== 'undefined' && Preloader.gate) Preloader.gate(loadGameplay);
+    else loadGameplay();
+  }
+
   var splashCfg = Game.script('SplashScreenLoader', C.splashScripts);
   if (splashCfg) {
-    Game.splash = Game.SplashScreenLoader(splashCfg, loadGameplay);
+    Game.splash = Game.SplashScreenLoader(splashCfg, enterGameplay);
     E.onClick(Game.splash.hostId, function () {
       E.unlockAudio(); Game.splash.loadNextScene();
     });

@@ -4,7 +4,7 @@ Reviewed and re-verified 2026-07-29 in real headless Chromium over CDP, driving 
 game with genuine pointer events — not a DOM shim and not a static read. Every row
 below was asserted mechanically; screenshots were inspected for the visual ones.
 
-Re-run in the browser at any time: **Shift + G** → *Run all* (QA, 56 assertions)
+Re-run in the browser at any time: **Shift + G** → *Run all* (QA, 60 assertions)
 and *Full review* (UI/UX). See `god-mode/README.md`.
 
 ---
@@ -32,10 +32,10 @@ and *Full review* (UI/UX). See `god-mode/README.md`.
 
 Checked and deliberately left alone. See `reports/known-approximations.md`.
 
-- `ChatBox` has `Group_7.png` at **alpha 0** — the caption panel is invisible by
-  design and the white text floats. Not a missing sprite.
-- The caption is **left-aligned at the top-left** of a 1261×103 box: that is the
-  authored TMP alignment, not a layout error.
+- The caption is **left-aligned** in a 1261×103 box: that is the authored TMP
+  alignment, not a layout error. (`ChatBox`'s alpha-0 Image was originally listed
+  here as authored-and-correct; it is now treated as an authoring slip and set to
+  alpha 1 — see *Deliberate departures* in `known-approximations.md`.)
 - The gem bag overhangs the right canvas edge by ~9 px
   (`anchoredPosition.x` 802.6, `sizeDelta` 332). Authored that way.
 - `complation panel/rays` (`Glittery_Shine.png`) is authored at alpha 0 and driven
@@ -185,7 +185,7 @@ rather than cropping or stretching, so composition never rearranges.
 | `tools/apply_layout.js` writes `data.js`, backs up, re-parses, reports per asset | **pass** — round-tripped and restored |
 | A missing asset ID is reported as `NOT FOUND`, never skipped silently | **pass** |
 | Round chips 1–9 and the four screen jumps | **pass** — no screen stacking |
-| QA suite | **56 passed, 0 failed, 0 warnings** |
+| QA suite | **60 passed, 0 failed, 0 warnings** |
 | UI/UX review with on-screen highlighting | **pass** — 0 issues, 1 warning (the authored bag overhang) |
 | Animation bar: classify, generate, preview, standalone CSS+JS export | **pass** |
 | Visual debug: bounds (74 nodes), safe area, text boxes, hit areas, inactive | **pass** |
@@ -213,3 +213,91 @@ rather than cropping or stretching, so composition never rearranges.
   `reports/visual-verification.md`).
 - Touch interaction on real phone and tablet hardware.
 - A native listener confirming the re-pointed final clip (22) is the intended take.
+
+---
+
+## 11. Performance, format and delivery audit — 2026-07-29
+
+Measured in real headless Chromium over CDP, not estimated.
+
+### 11.1 No loading, no lag, no buffer, no delay
+
+| Check | Result |
+|---|---|
+| Ready-to-play, cold cache, 1.5 Mbps / 40 ms | **7.1 s** (was 12.7 s before the asset conversion and the two-phase gate) |
+| What the veil actually waits for | **389 KB** — splash art, font, tap sound |
+| Gameplay payload | 1793 KB, streams behind the splash; the tap is gated so the scene never enters half-loaded |
+| Our render cost per frame, all 9 glows lit | **0.7 ms p50, 1.5 ms p95** — about 4% of a 60 Hz budget |
+| Frames over 33 ms with vsync disabled | **0 of 160** |
+| Long tasks (>50 ms) across the whole playthrough | **0** |
+| Frames over 50 ms | **0 of 750** |
+| Tap to caption response | **5–9 ms** |
+| Tap to gem reveal | 208–220 ms — the authored `delayBeforeEnable` of 0.2 s, not lag |
+| JavaScript exceptions / console errors | **0** |
+
+**On the FPS figure:** headless Chromium caps its compositor at 30 fps in both the
+old and new headless modes, so a raw `requestAnimationFrame` reading there is
+**not** a measure of this game's speed. With `--disable-frame-rate-limit` the same
+scene runs at **1258 fps (0.7 ms per frame)** with every glow active, and our own
+tick measures **0.00 ms** of JavaScript per frame. The renderer has very large
+headroom; any 30 fps reading in a headless report is the harness, not the game.
+
+### 11.2 Asset formats
+
+| Check | Result |
+|---|---|
+| Images | **60 WebP**, 0 PNG, 0 GIF |
+| Audio | **25 OGG**, 0 MP3 |
+| Font | 1 TTF |
+| `assets/img` size | 9.4 MB → **2.4 MB** (76% smaller) |
+| Lossless conversions bit-exact on alpha and visible RGB | **47 / 47** |
+| Alpha deviation, lossy files | **0** on all 12 |
+| Worst alpha-weighted visible RMSE | **5.5** (genie), most under 3 |
+| MP3 → OGG duration drift | **0.000 s** — captions pace from these durations |
+| GIF → WebP fingertip fraction | unchanged (0.4644, 0.5158), so `js/hint.js` stays valid |
+| Every referenced asset resolves on disk | **56 / 56**, 0 missing |
+
+Pre-conversion originals are preserved in `assets/_src-original/` (gitignored);
+delete that folder once the conversion is signed off. `favicon.png` stays PNG.
+
+### 11.3 Voice-over, text, animation, interaction, effects
+
+| Check | Result |
+|---|---|
+| Caption node visible, in the panel's inner field, within 22 px of its centre | pass |
+| All three caption slots share one position | pass |
+| Typing duration matches its clip within 0.25 s | pass, 39/39 lines |
+| VO durations cached before the first line types | 24 clips |
+| Caption wording overlaps its clip on every line | pass |
+| Tap hint fingertip on the glow | **0 px, 9/9 rounds**, inside the hit area 9/9 |
+| Hint pulse running | pass |
+| Idle hint: tutorial immediate, later rounds after 5 s idle, hides on tap | pass |
+| Glow local contrast (core minus surrounding ring) | 107–176 across all nine props |
+| Bag sprite advances sack_1…sack_9, painted = model | pass, 9/9 |
+| Wrong answer: sprite, panel, alert, shake, reset | pass |
+| Analytics | 9 correct + 1 wrong, correct payloads, no duplicates |
+
+### 11.4 No unnecessary elements
+
+Census of every visible node per state:
+
+| State | Visible | Overlays up | Stray gems | Stray hands | Glows |
+|---|---|---|---|---|---|
+| splash | 3 | none | 0 | 0 | 0 |
+| round 1 | 23 | ChatBox | 0 | 0 | 0 |
+| round 3 | 24 | ChatBox | 0 | 0 | 1 |
+| round 6 | 24 | ChatBox | 0 | 0 | 1 |
+| round 9 | 24 | ChatBox | 0 | 0 | 1 |
+| wrong feedback | 25 | incorrectChatBox + Incorrect State | 0 | 0 | 1 |
+| all collected | 23 | ChatBox | 0 | 0 | 0 |
+
+Exactly one message panel at a time, never more than one glow, no orphaned gems or
+hands. The whole-game alignment sweep also found **0** off-centre texts, **0** boxes
+escaping their parent and **0** glyph overflows; the only element past the canvas
+edge is the gem bag at 9 px, which is authored.
+
+### 11.5 God Mode QA suite
+
+**60 assertions, 0 failures, 0 warnings.** The loading test is two-phase aware: it
+asserts the splash set is cached always, and the full manifest only once the
+background payload reports ready.

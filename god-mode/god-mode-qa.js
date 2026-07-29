@@ -118,21 +118,35 @@ window.GodModeQA = function () {
     assert(r.y >= -2 && r.y + r.h <= U.stageSize()[1] + 2,
       'caption box is inside the canvas vertically');
 
-    // A dragged-by-eye position once left the caption 22px above its panel's
-    // centre, which read as misaligned against the panel's own border. The node
-    // is centre-anchored with a centre pivot, so "aligned" is exactly ap.y == 0.
+    /*
+     * The caption must sit in the panel graphic's INNER FIELD, not in the centre
+     * of its rect. Group_7.png is 1536x237 stretched to 1871x306, and its
+     * recessed field occupies rows 34-151 of 237 -- i.e. 14.3% to 64.1% of the
+     * panel's height, well above the rect's midpoint, because the sprite carries
+     * a deep bottom lip. Centring on the rect (anchoredPosition.y == 0) drops the
+     * text about 33px below the field and reads as misaligned; the scene's own
+     * authored 32 is almost exactly the field centre.
+     *
+     * An earlier version of this test asserted ap.y == 0 and would have rejected
+     * a correct value. Measure against the artwork, not the box.
+     */
+    var FIELD_TOP = 0.143, FIELD_BOTTOM = 0.641;
     var panel = rec.parent;
     if (panel) {
       var pr = U.stageRectOf(panel.el);
-      var dy = (r.y + r.h / 2) - (pr.y + pr.h / 2);
-      var dx = 0;
-      assert(Math.abs(dy) <= 2,
-        'caption is vertically centred in its panel (off by ' + U.round(dy, 1) + 'px)');
-      var d = rec.data;
-      if (d.anchorMin && d.anchorMin[1] === 0.5 && d.pivot && d.pivot[1] === 0.5) {
-        assert(Math.abs(d.anchoredPosition[1]) <= 1,
-          'caption anchoredPosition.y is 0 for a centre-anchored box (is ' +
-          d.anchoredPosition[1] + ')');
+      var fieldTop = pr.y + pr.h * FIELD_TOP;
+      var fieldBottom = pr.y + pr.h * FIELD_BOTTOM;
+      var glyphMid = r.y + r.h / 2;
+      assert(glyphMid > fieldTop && glyphMid < fieldBottom,
+        'caption sits inside the panel\'s inner field (' +
+        U.round(fieldTop, 0) + '-' + U.round(fieldBottom, 0) + ', is ' +
+        U.round(glyphMid, 0) + ')');
+      var off = glyphMid - (fieldTop + fieldBottom) / 2;
+      if (Math.abs(off) > 22) {
+        fail('caption is ' + U.round(off, 1) + 'px off the inner field centre');
+      } else {
+        pass('caption is centred on the panel\'s inner field (off by ' +
+          U.round(off, 1) + 'px)');
       }
     }
     // and the three caption slots must agree, or text jumps between states
@@ -341,14 +355,48 @@ window.GodModeQA = function () {
     info(m.images.length + ' images, ' + m.audio.length + ' clips in the manifest');
     assert(m.images.length > 0, 'image manifest is non-empty');
     assert(m.audio.length > 0, 'audio manifest is non-empty');
-    var durs = window.AUDIO_DURATIONS || {};
-    assert(Object.keys(durs).length >= m.audio.length * 0.8,
-      'VO metadata read for most clips (' + Object.keys(durs).length + '/' + m.audio.length + ')');
+
+    // Loading is two-phase: the veil only waits for the splash assets, and the
+    // gameplay payload streams in behind it. Asserting the whole manifest is
+    // cached is therefore only meaningful once phase 2 reports done -- before
+    // that, cold images are correct behaviour, not a defect.
+    var split = Preloader.splitManifest ? Preloader.splitManifest() : null;
+    if (split) {
+      info('phase 1 (veil waits): ' + split.splash.images.length + ' images, ' +
+        split.splash.audio.length + ' clips');
+      info('phase 2 (background): ' + split.rest.images.length + ' images, ' +
+        split.rest.audio.length + ' clips');
+      var coldSplash = split.splash.images.filter(function (src) {
+        var im = new Image(); im.src = src; return !im.complete;
+      });
+      assert(!coldSplash.length, 'every splash image is in cache' +
+        (coldSplash.length ? ' (' + coldSplash.length + ' cold)' : ''));
+    }
+
+    var restReady = Preloader.isRestReady ? Preloader.isRestReady() : true;
     var undecoded = m.images.filter(function (src) {
       var im = new Image(); im.src = src; return !im.complete;
     });
-    assert(!undecoded.length, 'every manifest image is in cache' +
-      (undecoded.length ? ' (' + undecoded.length + ' cold)' : ''));
+    if (restReady) {
+      assert(!undecoded.length, 'every manifest image is in cache' +
+        (undecoded.length ? ' (' + undecoded.length + ' cold)' : ''));
+    } else {
+      info('phase 2 still loading — ' + undecoded.length +
+        ' image(s) not yet cached, which is expected at this point');
+      pass('background payload is in flight (re-run once it settles)');
+    }
+
+    var durs = window.AUDIO_DURATIONS || {};
+    // Caption pacing needs a duration for the clip it is about to speak; the
+    // whole set only has to be there once phase 2 finishes.
+    if (restReady) {
+      assert(Object.keys(durs).length >= m.audio.length * 0.8,
+        'VO metadata read for most clips (' + Object.keys(durs).length + '/' +
+        m.audio.length + ')');
+    } else {
+      info('VO durations cached so far: ' + Object.keys(durs).length + '/' + m.audio.length);
+    }
+
     assert(!document.getElementById('preloader'),
       'the loading veil has been torn down');
     return tally();

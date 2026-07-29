@@ -47,14 +47,48 @@ var Preloader = (function () {
     }
   }
 
+  function listOf(imgs, auds) {
+    return {
+      images: Object.keys(imgs).filter(function (p) { return IMG_RE.test(p); }),
+      audio: Object.keys(auds).filter(function (p) { return AUDIO_RE.test(p); })
+    };
+  }
+
+  /** Everything, in one list -- what the QA loading test asserts against. */
   function manifest() {
     var imgs = Object.create(null), auds = Object.create(null);
     walkSprites(window.SPLASH_LAYOUT, imgs);
     walkSprites(window.LAYOUT, imgs);
     walkClips(window.CONFIG, auds, 0);
+    return listOf(imgs, auds);
+  }
+
+  /**
+   * Split by scene, because gating the first frame on the whole 4 MB payload cost
+   * 12.7 s on a 1.5 Mbps line -- most of it gameplay art the child cannot see yet.
+   * The splash needs a few hundred KB; the rest loads behind it while they look at
+   * the title and reach for "Let's Go", which is several seconds of real time.
+   */
+  function splitManifest() {
+    var sImg = Object.create(null), sAud = Object.create(null);
+    walkSprites(window.SPLASH_LAYOUT, sImg);
+    walkClips(window.CONFIG.splashScripts, sAud, 0);
+
+    var allImg = Object.create(null), allAud = Object.create(null);
+    walkSprites(window.SPLASH_LAYOUT, allImg);
+    walkSprites(window.LAYOUT, allImg);
+    walkClips(window.CONFIG, allAud, 0);
+
+    var splash = listOf(sImg, sAud);
+    var everything = listOf(allImg, allAud);
+    var isSplash = function (p) { return splash.images.indexOf(p) >= 0; };
+    var isSplashAudio = function (p) { return splash.audio.indexOf(p) >= 0; };
     return {
-      images: Object.keys(imgs).filter(function (p) { return IMG_RE.test(p); }),
-      audio: Object.keys(auds).filter(function (p) { return AUDIO_RE.test(p); })
+      splash: splash,
+      rest: {
+        images: everything.images.filter(function (p) { return !isSplash(p); }),
+        audio: everything.audio.filter(function (p) { return !isSplashAudio(p); })
+      }
     };
   }
 
@@ -121,15 +155,26 @@ var Preloader = (function () {
   }
 
   // ------------------------------------------------------------------- run
-  /**
-   * Raise an opaque veil, decode everything behind it, then fade it out. The
-   * game boots as usual underneath, so the frame revealed is already complete.
-   */
-  function hold(onReady) {
-    var list = manifest();
+  function runJobs(list, onTick) {
     var jobs = list.images.map(function (p) { return { kind: 'img', src: p }; })
       .concat(list.audio.map(function (p) { return { kind: 'aud', src: p }; }));
-    var total = jobs.length + 1;             // +1 for the font pass
+    return jobs.map(function (j) {
+      var t = j.kind === 'img' ? loadImage(j.src) : loadAudioMeta(j.src);
+      return onTick ? t.then(onTick) : t;
+    });
+  }
+
+  var restReady = null;       // resolves when the gameplay payload is in cache
+  var restDone = false;
+
+  /**
+   * Raise an opaque veil, decode the SPLASH assets behind it, then fade out. The
+   * gameplay payload keeps loading afterwards, so the title appears in about a
+   * fifth of the time while nothing the child can reach is missing.
+   */
+  function hold(onReady) {
+    var split = splitManifest();
+    var total = split.splash.images.length + split.splash.audio.length + 1;
     var done = 0;
     var view = buildOverlay();
 
@@ -140,9 +185,7 @@ var Preloader = (function () {
       view.pct.textContent = pctVal + '%';
     }
 
-    var work = jobs.map(function (j) {
-      return (j.kind === 'img' ? loadImage(j.src) : loadAudioMeta(j.src)).then(tick);
-    });
+    var work = runJobs(split.splash, tick);
     work.push(fontsReady().then(tick));
 
     return Promise.all(work).then(function () {
@@ -151,10 +194,53 @@ var Preloader = (function () {
       setTimeout(function () {
         if (view.root.parentNode) view.root.parentNode.removeChild(view.root);
       }, TIMING.fadeOut + 60);
+
+      // Only now start the gameplay payload. Kicking it off in parallel with the
+      // splash assets looked like a free win but the browser shares its handful of
+      // connections between them, so the 389 KB the veil was actually waiting on
+      // arrived at a fraction of the line rate -- ready-to-play measured 9.4 s
+      // instead of the ~3 s the split was supposed to buy.
+      restReady = Promise.all(runJobs(split.rest, null)).then(function () {
+        restDone = true;
+      });
     });
   }
 
-  return { hold: hold, manifest: manifest };
+  /**
+   * Run `fn` once the gameplay payload is decoded. Normally it already is by the
+   * time the child taps, so this is a straight call with no veil and no delay; on
+   * a slow line it shows the progress veil rather than letting the scene pop in.
+   */
+  function gate(fn) {
+    if (restDone || !restReady) { fn(); return; }
+    var split = splitManifest();
+    var total = split.rest.images.length + split.rest.audio.length;
+    var view = buildOverlay();
+    view.root.classList.remove('pl-gone');
+    var poll = setInterval(function () {
+      // approximate progress from what the browser has already cached
+      var got = split.rest.images.filter(function (s) {
+        var im = new Image(); im.src = s; return im.complete;
+      }).length;
+      var pctVal = Math.min(99, Math.round(got / Math.max(1, total) * 100));
+      view.fill.style.width = pctVal + '%';
+      view.pct.textContent = pctVal + '%';
+    }, 200);
+    restReady.then(function () {
+      clearInterval(poll);
+      view.fill.style.width = '100%';
+      view.pct.textContent = '100%';
+      view.root.classList.add('pl-gone');
+      fn();
+      setTimeout(function () {
+        if (view.root.parentNode) view.root.parentNode.removeChild(view.root);
+      }, TIMING.fadeOut + 60);
+    });
+  }
+
+  return { hold: hold, gate: gate, manifest: manifest,
+           splitManifest: splitManifest,
+           isRestReady: function () { return restDone; } };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Preloader;

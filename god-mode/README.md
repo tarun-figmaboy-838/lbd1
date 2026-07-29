@@ -50,7 +50,7 @@ Nothing here needs a web server — `file://` and `http://` are identical.
 | `god-mode-utils.js` | Shared helpers (`window.GodModeUtils`): stage-space maths, clipboard with `execCommand` fallback, JSON download, node access, toast. Loaded **first**. |
 | `god-mode-live-editor.js` | The layout editor. Select, drag, resize, type exact values, edit text, export JSON. |
 | `god-mode-animation-bar.js` | Generated animation ideas per element type + trigger, live preview, standalone CSS/JS export. |
-| `god-mode-qa.js` | 56 automated assertions against the live game and the real DOM. |
+| `god-mode-qa.js` | 60 automated assertions against the live game and the real DOM. |
 | `god-mode-ux-review.js` | Kid-focused heuristics with on-screen highlighting. |
 | `god-mode.js` | Controller: activation, shortcuts, screen/round navigation, gems, animation speed, visual debug. |
 | `god-mode-panel.js` | The panel markup as a string on `window.GOD_PANEL_HTML`. Held in JS, not fetched from a `.html`, so `http://` and `file://` behave identically — edit the template here. |
@@ -209,7 +209,7 @@ bag) are hidden, so screens never stack.
 
 ## QA tests
 
-Eight suites, 56 assertions, all against the running instance.
+Eight suites, 60 assertions, all against the running instance.
 
 | Test | Verifies |
 |---|---|

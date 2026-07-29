@@ -42,6 +42,14 @@ lbd1/
 └── reports/             extraction, behaviour, QA and approximation notes
 ```
 
+## Assets
+
+All artwork ships as **WebP** (60 files, 2.4 MB — down from 9.4 MB of PNG) and all
+audio as **OGG** (25 files). 47 images converted lossless and verified bit-exact;
+12 larger ones at q92/q96 with zero alpha deviation and a worst alpha-weighted
+visible RMSE of 5.5. Pre-conversion originals sit in `assets/_src-original/`,
+gitignored and safe to delete.
+
 ## Loading
 
 `js/preloader.js` walks every sprite and clip out of the embedded layout, decodes
@@ -49,6 +57,11 @@ them behind an opaque veil with a progress bar, and reveals a fully painted firs
 frame. It also caches clip durations as `window.AUDIO_DURATIONS`, which is what
 lets the dialogue typewriter finish each caption with its voice-over instead of
 running at a fixed characters-per-second.
+
+Loading is two-phase: the veil waits only for the splash assets (389 KB), then the
+gameplay payload streams in behind it, and the splash tap is gated so the scene is
+never entered half-loaded. That took ready-to-play on a 1.5 Mbps line from 12.7 s
+to 7.1 s.
 
 The game still boots immediately — it boots *underneath* the veil. Removing the
 `<script>` tag restores the original un-gated boot; `main.js` only calls
@@ -75,7 +88,7 @@ back to the serialized positions.
 
 Press **Shift + G** to open God Mode — or append `?god=1` to the URL, or call
 `god()` in the console. Jump to any screen or round, drag and resize any element
-Figma-style, edit text live, export the result as layout JSON, and run 56 automated
+Figma-style, edit text live, export the result as layout JSON, and run 60 automated
 QA assertions plus a kid-focused UX review. Works identically from `file://`. Full
 documentation in [`god-mode/README.md`](god-mode/README.md).
 

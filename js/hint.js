@@ -34,7 +34,7 @@ var Hint = (function () {
 
   var E = null;
 
-  // Measured from assets/img/frame_00_delay-0.02s.gif -- see the header.
+  // Measured from the tap-hand sprite (assets/img/frame_00_delay-0.02s.webp).
   var SPRITE = 1200;
   var TIP = { x: 0.4644, y: 0.5158 };
 
@@ -97,23 +97,6 @@ var Hint = (function () {
     return E.centerOf(btn ? btn.id : parent.id);
   }
 
-  /**
-   * localScale multiplied over the hand's ANCESTORS only. anchoredPosition is
-   * expressed in the parent's layout units, and every scale above the hand
-   * magnifies those units on screen; the hand's own scale does not move its box
-   * (it scales about its own pivot). Three props carry a scale -- rock crevice
-   * 1.1, floor crack 1.3, treasure box 1.5 -- and ignoring it left the finger up
-   * to 139 px adrift on exactly those three.
-   */
-  function ancestorScale(hand) {
-    var sx = 1, sy = 1, n = hand.parent;
-    while (n) {
-      if (!n.isRootCanvas) { sx *= n.scale[0] || 1; sy *= n.scale[1] || 1; }
-      n = n.parent;
-    }
-    return [sx || 1, sy || 1];
-  }
-
   /** The fingertip's current position in stage px, read off the rendered box. */
   function renderedTip(hand) {
     var cs = E.scale() || 1;
@@ -156,10 +139,14 @@ var Hint = (function () {
     if (!pt) return;
     var el = ensureOverlay(hand);
     if (!el) return;
-    var k = ancestorScale(hand);
-    // rendered size = sizeDelta * own localScale * every ancestor's localScale
-    var w = (hand.data.sizeDelta ? hand.data.sizeDelta[0] : SPRITE) * (hand.scale[0] || 1) * k[0];
-    var h = (hand.data.sizeDelta ? hand.data.sizeDelta[1] : SPRITE) * (hand.scale[1] || 1) * k[1];
+    // Size from the hand's OWN scale only -- deliberately not the ancestors'.
+    // Matching the scene exactly meant inheriting each prop's localScale, so the
+    // hint measured 240px on the statue but 264 on the rock crevice, 312 on the
+    // floor crack and 360 on the treasure box. The hint is a piece of UI that
+    // means one thing wherever it appears, so it is one size everywhere; the prop
+    // it points at should not resize the instruction.
+    var w = (hand.data.sizeDelta ? hand.data.sizeDelta[0] : SPRITE) * (hand.scale[0] || 1);
+    var h = (hand.data.sizeDelta ? hand.data.sizeDelta[1] : SPRITE) * (hand.scale[1] || 1);
     el.style.width = w + 'px';
     el.style.height = h + 'px';
     el.style.left = (pt[0] - TIP.x * w) + 'px';

@@ -1222,11 +1222,13 @@ var Engine = (function () {
   var GLOW_SIZE_K = 0.29;        // steady halos, tuned against the Unity build
   var GLOW_BREATHE_HZ = 0.35;    // slow in-out, matches the original's pulse
   var GLOW_ALPHA_GAIN = 2.5;     // see drawGlowField: per-particle alpha -> one glow
-  var GLOW_GLINT_K = 0.19;       // specular hotspot, as a fraction of the glow radius
+  var GLOW_GLINT_K = 0.27;       // specular hotspot, as a fraction of the glow radius
   var GLOW_RAY_LONG = 1.55;      // soft streak reach, as a multiple of the radius
   var GLOW_RAY_SHORT = 0.95;
   var GLOW_RAY_SPIN = 0.07;      // rad/s -- barely perceptible, keeps it alive
   var GLOW_TWINKLES = 5;         // drifting sparks around the glow
+  var GLOW_PAD_K = 1.6;         // contrast pad radius, as a multiple of the glow radius
+  var GLOW_PAD_ALPHA = 0.62;      // how strongly it darkens the backdrop
 
   function worldToPx() { return stageH / 10; }
 
@@ -1282,6 +1284,18 @@ var Engine = (function () {
     var a = clamp01((col.length > 3 ? col[3] : 1) * GLOW_ALPHA_GAIN * (0.9 + 0.1 * breathe));
 
     fxCtx.save();
+    // Contrast pad: a soft, deeply darkened wash of the glow's own hue, laid down
+    // BEFORE the light. Hue alone cannot carry visibility -- GlowEffect_lake is
+    // the same green as the statue's, but the lake is bright cyan water, so a
+    // cyan-green glow on it had almost no luminance difference and vanished. A
+    // darker pad underneath gives the light something to read against, which is
+    // how it reads as a glow sunk into the water rather than a tint on top of it.
+    // On the dark props it is imperceptible, so one set of values covers all nine.
+    var padR = R * GLOW_PAD_K;
+    fxCtx.globalAlpha = clamp01(a * GLOW_PAD_ALPHA);
+    fxCtx.drawImage(glowFieldSprite(darkenBy(base, 0.22)),
+      c[0] - padR, c[1] - padR, padR * 2, padR * 2);
+
     // The halo blends NORMALLY, not additively. Additive light clips to white on
     // a pale prop -- over the cyan lake the whole glow came out rgb(255,255,255)
     // and simply disappeared into the water, while reading fine on the dark
@@ -1333,8 +1347,8 @@ var Engine = (function () {
     // the streaks, so it stays legible even where the glow and the prop share a
     // hue (gold on the treasure chest).
     var glint = R * GLOW_GLINT_K * (2 - breathe);
-    fxCtx.globalAlpha = clamp01(a * 0.8);
-    fxCtx.drawImage(glowSprite(whitenBy(base, 0.85)), c[0] - glint, c[1] - glint,
+    fxCtx.globalAlpha = clamp01(a);
+    fxCtx.drawImage(glowSprite(whitenBy(base, 0.92)), c[0] - glint, c[1] - glint,
       glint * 2, glint * 2);
     fxCtx.restore();
     fxCtx.globalAlpha = 1;
@@ -1358,6 +1372,15 @@ var Engine = (function () {
     return 'rgba(' + up(p[0]) + ',' + up(p[1]) + ',' + up(p[2]) + ',1)';
   }
   function whiten(cssColor) { return whitenBy(cssColor, 0.45); }
+
+  /** Scale a colour's channels toward black, keeping its hue. */
+  function darkenBy(cssColor, k) {
+    var m = /^rgba?\(([^)]+)\)$/.exec(cssColor);
+    if (!m) return cssColor;
+    var p = m[1].split(',');
+    function dn(v) { return Math.round(parseFloat(v) * k); }
+    return 'rgba(' + dn(p[0]) + ',' + dn(p[1]) + ',' + dn(p[2]) + ',1)';
+  }
 
   /**
    * Glow-field gradient: holds its energy near the centre so the result reads as
