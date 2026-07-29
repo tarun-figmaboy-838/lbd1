@@ -107,19 +107,52 @@ var Game = (function () {
     }
   }
 
-  /** Target anchoredPosition that puts `id`'s centre on `targetId`'s centre. */
+  /** localScale multiplied down a node's ANCESTOR chain, per axis. */
+  function ancestorScale(rec) {
+    var sx = 1, sy = 1, n = rec.parent;
+    while (n) {
+      if (!n.isRootCanvas) { sx *= n.scale[0] || 1; sy *= n.scale[1] || 1; }
+      n = n.parent;
+    }
+    return [sx || 1, sy || 1];
+  }
+
+  /** A node's rendered centre in stage pixels, transforms included. */
+  function renderedCentre(rec) {
+    var st = document.getElementById('stage');
+    if (!rec || !st) return null;
+    var cs = E.scale() || 1;
+    var sr = st.getBoundingClientRect();
+    var q = rec.el.getBoundingClientRect();
+    if (!q.width || !q.height) return null;
+    return [(q.left - sr.left) / cs + (q.width / cs) / 2,
+      (q.top - sr.top) / cs + (q.height / cs) / 2];
+  }
+
+  /**
+   * Target anchoredPosition that puts `id`'s rendered centre on `targetId`'s.
+   *
+   * Derived from the two RENDERED centres and divided by the ancestor scale,
+   * rather than from anchor/pivot arithmetic on raw layout values. The previous
+   * version accumulated `left`/`top` up the chain but ignored every ancestor's
+   * localScale, so the delta was applied 1:1 into a parent's scaled space and
+   * overshot by exactly that factor. Three props carry a scale and all three
+   * missed the bag in proportion: rock crevice (1.1) by 64 px, floor crack (1.3)
+   * by 333 px, and treasure box (1.5) by 536 px -- the last two flew off the
+   * 1920-wide stage entirely before vanishing. Measuring the rendered boxes needs
+   * no model of the transform chain, so it also survives rotation or a future
+   * scale change.
+   */
   function centreAnchoredPos(id, targetId) {
-    var rec = E.get(id), tc = E.centerOf(targetId);
-    if (!rec) return [0, 0];
-    var px = 0, py = 0, n = rec.parent;
-    while (n) { px += n.left; py += n.top; n = n.parent; }
-    var pw = rec.parent ? rec.parent.w : E.stageSize()[0];
-    var ph = rec.parent ? rec.parent.h : E.stageSize()[1];
-    var d = rec.data;
-    var cornerX = (tc[0] - px) - rec.w / 2;
-    var cornerYBottom = (ph - (tc[1] - py)) - rec.h / 2;
-    return [cornerX - d.anchorMin[0] * pw + d.sizeDelta[0] * d.pivot[0],
-      cornerYBottom - d.anchorMin[1] * ph + d.sizeDelta[1] * d.pivot[1]];
+    var rec = E.get(id), target = E.get(targetId);
+    if (!rec || !target) return [0, 0];
+    var from = renderedCentre(rec), to = renderedCentre(target);
+    var ap = E.getAnchoredPos(id);
+    if (!from || !to) return ap;
+    var k = ancestorScale(rec);
+    // Unity Y points up, the browser's down, so the vertical delta is negated.
+    return [ap[0] + (to[0] - from[0]) / k[0],
+      ap[1] - (to[1] - from[1]) / k[1]];
   }
 
   // ======================================================== TutorialDialogue
@@ -479,9 +512,28 @@ var Game = (function () {
       });
     }
 
+    /**
+     * A quick squash-and-settle on the bag as the gem lands. Without it the gem
+     * simply disappears and the sprite swaps on the same frame, which reads as the
+     * gem vanishing rather than being caught. Scale only, about the bag's own
+     * pivot, so nothing moves and the layout is untouched.
+     */
+    function bagCatch() {
+      if (!targetImage) return;
+      var pop = new E.TaskGroup('bag-catch-' + targetImage);
+      pop.tween(0.12, 'outQuad', function (t) {
+        E.setScale(targetImage, 1 + 0.10 * t, 1 - 0.07 * t);
+      }, function () {
+        pop.tween(0.22, 'outBack', function (t) {
+          E.setScale(targetImage, 1.10 - 0.10 * t, 0.93 + 0.07 * t);
+        }, function () { E.setScale(targetImage, 1, 1); });
+      });
+    }
+
     function updateBagImage() {
       if (targetImage && targetSprite) E.setSprite(targetImage, targetSprite);
       E.setActive(imageToMove, false);
+      bagCatch();
       if (messageText) E.setText(messageText, winnerText);
       Game.tutorial.incrementGemIndex();
       Game.tutorial.callSetButtonSetWhenActive();
